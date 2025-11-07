@@ -14,7 +14,7 @@ then
    echo "LABELI      :: Initial date YYYYMMDDHH, e.g.: 2024010100"
    echo "FCST        :: Forecast hours, e.g.: 24 or 36, etc."
    echo ""
-   echo "24 hour forcast example:"
+   echo "24 hour forecast example:"
    echo "${0} GFS 1024002 2024010100 24"
    echo "${0} GFS   40962 2024010100 48"
    echo ""
@@ -41,7 +41,7 @@ EXECS=${DIRHOMED}/execs;                mkdir -p ${EXECS}
 
 # Input variables:--------------------------------------
 EXP=${1};         #EXP=GFS
-RES=${2};         #RES=1024002
+MESH=${2};         #MESH
 YYYYMMDDHHi=${3}; #YYYYMMDDHHi=2024012000
 FCST=${4};        #FCST=24
 #-------------------------------------------------------
@@ -69,15 +69,15 @@ then
    if [ ! -s ${GCCCIS}/${YYYYMMDDHHi:0:4}/${YYYYMMDDHHi}/gfs.t${YYYYMMDDHHi:8:2}z.pgrb2.0p25.f000.${YYYYMMDDHHi}.grib2 ]
    then
       echo -e "${RED}==>${NC}Condicao de contorno inexistente !"
-      echo -e "${RED}==>${NC}Check ${BNDDIR} or." 
+      echo -e "${RED}==>${NC}Check ${BNDDIR} or."
       echo -e "${RED}==>${NC}Check ${GCCCIS}"
-      exit 1            
+      exit 1
    else
       BNDDIR=${GCCCIS}/${YYYYMMDDHHi:0:4}/${YYYYMMDDHHi}
-   fi    
+   fi
 fi
 
-files_needed=("${DATAIN}/fixed/x1.${RES}.static.nc" "${DATAIN}/fixed/Vtable.${EXP}" "${EXECS}/ungrib.exe" "${BNDDIR}/gfs.t${YYYYMMDDHHi:8:2}z.pgrb2.0p25.f000.${YYYYMMDDHHi}.grib2")
+files_needed=("${DATAIN}/fixed/${MESH}.static.nc" "${DATAIN}/fixed/Vtable.${EXP}" "${EXECS}/ungrib.exe" "${BNDDIR}/gfs.t${YYYYMMDDHHi:8:2}z.pgrb2.0p25.f000.${YYYYMMDDHHi}.grib2 ")
 for file in "${files_needed[@]}"
 do
   if [ ! -s "${file}" ]
@@ -88,7 +88,7 @@ do
   fi
 done
 
-cp -f ${DATAIN}/fixed/x1.${RES}.static.nc ${DIRRUN}
+cp -f ${DATAIN}/fixed/${MESH}.static.nc ${DIRRUN}
 cp -f ${DATAIN}/fixed/Vtable.${EXP} ${DIRRUN}/Vtable
 cp -f ${EXECS}/ungrib.exe ${DIRRUN}
 cp -f ${BNDDIR}/gfs.t${YYYYMMDDHHi:8:2}z.pgrb2.0p25.f000.${YYYYMMDDHHi}.grib2 ${DATAIN}/${YYYYMMDDHHi}
