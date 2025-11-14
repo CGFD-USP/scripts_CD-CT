@@ -24,7 +24,7 @@ then
    echo ""
    echo "${0} EXP_NAME/OP RESOLUTION LABELI FCST"
    echo ""
-   echo "EXP_NAME    :: Forcing: GFS"
+   echo "EXP_NAME       :: Forcing: GFS, ERA5, or IDEALIZED*, where * corresponds to the idealized test case number following MPAS user guide, section 7.1. Example: IDEALIZED2 ==> test case 2: Jablonowski and Williamson baroclinic wave, with initial perturbation"
    echo "            :: Others options to be added later..."
    echo "RESOLUTION  :: number of points in resolution model grid, e.g: 1024002  (24 km)"
    echo "                                                                 40962  (120 km)"
@@ -47,7 +47,7 @@ echo -e "\033[1;32m==>\033[0m Moduling environment for MONAN model...\n"
 
 
 
-# Standart directories variables:---------------------------------------
+# Standard directories variables:---------------------------------------
 DIRHOMES=${DIR_SCRIPTS}/scripts_CD-CT; mkdir -p ${DIRHOMES}  
 DIRHOMED=${DIR_DADOS}/scripts_CD-CT;   mkdir -p ${DIRHOMED}  
 SCRIPTS=${DIRHOMES}/scripts;           mkdir -p ${SCRIPTS}
@@ -60,7 +60,7 @@ EXECS=${DIRHOMED}/execs;               mkdir -p ${EXECS}
 
 # Input variables:--------------------------------------
 EXP=${1};         #EXP=GFS
-RES=${2};         #RES=1024002
+MESH=${2};         #MESH=lat_40_lon_-8_oradius_300_iradius_100_margin_200_hres_3_lres_30.region
 YYYYMMDDHHi=${3}; #YYYYMMDDHHi=2024012000
 FCST=${4};        #FCST=24
 #-------------------------------------------------------
@@ -92,27 +92,59 @@ rsync -rv --chmod=ugo=rw ${DIRDADOS}/MONAN_datain/datain/fixed ${DATAIN}
 rsync -rv --chmod=ugo=rwx ${DIRDADOS}/MONAN_datain/execs ${DIRHOMED}
 ln -sf ${DIRDADOS}/MONAN_datain/datain/WPS_GEOG ${DATAIN}
 
-
+if [[ $EXP == "GFS" || $EXP == "ERA5" ]]; then
 # Creating the x1.${RES}.static.nc file once, if does not exist yet:---------------
-if [ ! -s ${DATAIN}/fixed/x1.${RES}.static.nc ]
-then
-   echo -e "${GREEN}==>${NC} Creating static.bash for submiting init_atmosphere to create x1.${RES}.static.nc...\n"
-   time ./make_static.bash ${EXP} ${RES} ${YYYYMMDDHHi} ${FCST}
+   if [ ! -s ${DATAIN}/fixed/${MESH}.static.nc ]
+   then
+      echo -e "${GREEN}==>${NC} Creating static.bash for submiting init_atmosphere to create ${MESH}.static.nc...\n"
+      time ./make_static.bash ${EXP} ${MESH} ${YYYYMMDDHHi} ${FCST}
+   else
+      echo -e "${GREEN}==>${NC} File ${MESH}.static.nc already exist in ${DATAIN}/fixed.\n"
+   fi
+#----------------------------------------------------------------------------------
+elif [[ $EXP == IDEALIZED* ]]; then
+   echo -e "${GREEN}==>${NC} Idealized case selected. No need for creating a static file.\n"
 else
-   echo -e "${GREEN}==>${NC} File x1.${RES}.static.nc already exist in ${DATAIN}/fixed.\n"
+   echo -e  "\n${RED}==>${NC} ***** ATTENTION *****\n"
+   echo -e  "${RED}==>${NC} Static phase fails! Please select EXP=GFS, EXP=ERA5 or EXP=IDEALIZED*.\n"
+   echo -e  "${RED}==>${NC} Exiting script. \n"
+   exit -1
+fi
+
+# Degrib phase:---------------------------------------------------------------------
+if [[ ${EXP} == "GFS" ]]
+then
+   echo -e  "${GREEN}==>${NC} Submitting Degrib for GFS data...\n"
+   time ./make_degrib_GFS.bash ${EXP} ${MESH} ${YYYYMMDDHHi} ${FCST}
+elif [[ ${EXP} == "ERA5" ]]
+then
+   echo -e  "${GREEN}==>${NC} Submitting Degrib for ERA5 data...\n"
+   time ./make_degrib_ERA5.bash ${EXP} ${MESH} ${YYYYMMDDHHi} ${FCST}
+elif [[ ${EXP} == IDEALIZED* ]]
+then
+   echo -e "${GREEN}==>${NC} Idealized case selected. No need for degrib.\n"
+else
+   echo -e  "\n${RED}==>${NC} ***** ATTENTION *****\n"
+   echo -e  "${RED}==>${NC} Degrib phase fails! Please select EXP=GFS, EXP=ERA5 or EXP=IDEALIZED*.\n"
+   echo -e  "${RED}==>${NC} Exiting script. \n"
+   exit -1
 fi
 #----------------------------------------------------------------------------------
 
 
-# Degrib phase:---------------------------------------------------------------------
-echo -e  "${GREEN}==>${NC} Submiting Degrib...\n"
-time ./make_degrib.bash ${EXP} ${RES} ${YYYYMMDDHHi} ${FCST}
-#----------------------------------------------------------------------------------
-
-
 # Init Atmosphere phase:------------------------------------------------------------
-echo -e  "${GREEN}==>${NC} Submiting Init Atmosphere...\n"
-time ./make_initatmos.bash ${EXP} ${RES} ${YYYYMMDDHHi} ${FCST}
+if [[ $EXP == "GFS" || $EXP == "ERA5" ]]; then   
+   echo -e  "${GREEN}==>${NC} Submitting Init Atmosphere for real case...\n"
+   time ./make_initatmos.bash ${EXP} ${MESH} ${YYYYMMDDHHi} ${FCST}
+elif [[ $EXP == IDEALIZED* ]]; then
+   echo -e  "${GREEN}==>${NC} Submitting Init Atmosphere for idealized case...\n"
+   time ./make_initatmos_idealized.bash ${EXP} ${MESH} ${YYYYMMDDHHi} ${FCST}
+else
+   echo -e  "\n${RED}==>${NC} ***** ATTENTION *****\n"
+   echo -e  "${RED}==>${NC} Init Atmosphere phase fails! Please select EXP=GFS, EXP=ERA5 or EXP=IDEALIZED*.\n"
+   echo -e  "${RED}==>${NC} Exiting script. \n"
+   exit -1
+fi
 #----------------------------------------------------------------------------------
 
 
