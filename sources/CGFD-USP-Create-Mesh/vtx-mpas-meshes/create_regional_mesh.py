@@ -22,14 +22,22 @@ parser.add_argument('--do_regional', type=str, default='y',
                     help='flag for building regional (y) or global (n) mesh')
 parser.add_argument('--grid_type', type=str, default='doughnut', 
                     help='type of grid to be constructed')
-
+# Ellipse-specific arguments (optional)
+parser.add_argument('--a_km', type=float, default=None,
+                    help='ellipse semi-major axis in km (optional; defaults to inner_radius)')
+parser.add_argument('--b_km', type=float, default=None,
+                    help='ellipse semi-minor axis in km (optional; defaults to inner_radius)')
+parser.add_argument('--angle', type=float, default=0.0,
+                    help='ellipse rotation angle in degrees CCW from east (optional)')
+parser.add_argument('--delta', type=float, default=0.12,
+                    help='transition width for ellipse in normalized units (optional)')
 
 # Parse the command line arguments
 args = parser.parse_args()
 
 # Set relevant directories
-DATA_DIR = args.vtx_mpas_meshes_dir+'/data'
-VTX_MPAS_MESHES_DIR=args.vtx_mpas_meshes_dir
+DATA_DIR = args.vtx_mpas_meshes_dir + '/data'
+VTX_MPAS_MESHES_DIR = args.vtx_mpas_meshes_dir
 
 # Lon,lat of mesh center
 lon_ref = args.lon
@@ -49,11 +57,23 @@ lowres = args.low_res # mgs in the paper
 numlayers = args.n_layers # layers outside requested nominal radius
 grid_type = args.grid_type # type of grid to be constructed
 
+# Ellipse parameters: if user requested an ellipse, allow overriding defaults
+a_km = args.a_km if args.a_km is not None else size
+b_km = args.b_km if args.b_km is not None else size
+angle = args.angle
+delta = args.delta
+
 # Set main filename
-name = (f"lat_{round(lat_ref)}_lon_{round(lon_ref)}_oradius_{round(args.outer_radius)}_iradius_{round(size)}"+
-        f"_margin_{round(margin)}_hres_{round(highres)}_lres_{round(lowres)}") # 's' + str(size).zfill(2) + '_m' + str(margin).zfill(3)
-radius = size+margin
-region_border = radius + (numlayers*lowres)#*0.9
+# Include ellipse parameters in the name when relevant
+if grid_type == 'ellipse':
+    name = (f"lat_{round(lat_ref)}_lon_{round(lon_ref)}_ellipse_a_{round(a_km)}_b_{round(b_km)}_ang_{round(angle)}" +
+            f"_iradius_{round(size)}_margin_{round(margin)}_hres_{round(highres)}_lres_{round(lowres)}")
+else:
+    name = (f"lat_{round(lat_ref)}_lon_{round(lon_ref)}_oradius_{round(args.outer_radius)}_iradius_{round(size)}"+
+            f"_margin_{round(margin)}_hres_{round(highres)}_lres_{round(lowres)}") # 's' + str(size).zfill(2) + '_m' + str(margin).zfill(3)
+
+radius = size + margin
+region_border = radius + (numlayers * lowres)  # *0.9
 
 # Set specific filenames
 regional_mesh = DATA_DIR + '/' + name + '.region.grid.nc'
@@ -63,7 +83,8 @@ regional_mesh_plots = DATA_DIR + '/resolution*'
 # Run main script
 if not os.path.exists(regional_mesh):
     # Create a regional mesh at the desired location -> with 4 layers (?)
-    print ('creating regional mesh centered at chosen location')
+    print('creating regional mesh centered at chosen location')
+    # Pass ellipse parameters only (they are ignored unless grid_type == 'ellipse')
     full_generation_process_gtm(
         regional_mesh, grid_type,
         redo=False, do_plots=False, do_region=args.do_regional,
@@ -71,6 +92,8 @@ if not os.path.exists(regional_mesh):
         num_boundary_layers=numlayers,
         size=size, margin=margin,
         lat_ref=lat_ref, lon_ref=lon_ref,
+        # ellipse kwargs
+        a_km=a_km, b_km=b_km, angle=angle, delta=delta
     )
 else:
     print("Mesh already exists -- nothing to be done.")
@@ -87,7 +110,7 @@ os.system(f'cd {OUTPUT_DIR}; cp {regional_mesh} {regional_mesh_info} ../')
 os.system(f'cp {VTX_MPAS_MESHES_DIR}/mesh* create_mesh.log {OUTPUT_DIR}')
 
 # Create block decomposition file
-print ('N:',args.N)
+print('N:', args.N)
 os.system(f'gpmetis -minconn -contig -niter=200 {OUTPUT_DIR}/{name}.region.grid.graph.info {args.N}')
 
 # Remove temporary output files
@@ -95,7 +118,7 @@ os.system(f'rm {DATA_DIR}/*.nc')
 os.system(f'rm -r {VTX_MPAS_MESHES_DIR}/mesh* {VTX_MPAS_MESHES_DIR}/tmp* points.txt')
 
 # Add file name to mesh_input_file.txt
-print (args.exp_dir)
+print(args.exp_dir)
 try:
     # Open the file in append mode
     with open(f'{args.exp_dir}/mesh_input_file.txt', 'a') as file:
