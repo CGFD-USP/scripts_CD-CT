@@ -30,6 +30,15 @@ export MONANDIR=/mnt/beegfs/$USER/scripts_CD-CT/sources/MONAN-Model_release/1.4.
 
 # Submiting variables:
 
+# Grid plotting phase
+export GRID_QUEUE="batch"
+export GRID_ncores=1
+export GRID_nnodes=1
+export GRID_ncpt=1
+export GRID_memory=16
+export GRID_jobname="GridPlot.MONAN"
+export GRID_walltime="8:00:00"
+
 # PRE-Static phase:
 export STATIC_QUEUE="batch"
 export STATIC_ncores=32
