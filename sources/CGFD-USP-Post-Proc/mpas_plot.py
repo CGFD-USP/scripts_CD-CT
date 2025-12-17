@@ -9,6 +9,7 @@ Last edited: Nov 2023 by P. Peixoto (ppeixoto@usp.br)
 Last edited: Nov 2023 by F.A.V.B. Alves (fbalves@usp.br)
 Last edited: Mar 2024 by G. Torres Mendonça (guilherme.torresmendonca@ime.usp.br)
 Last edited: Oct 2025 by G. Torres Mendonça (guilherme.torresmendonca@ime.usp.br)
+Last edited: Dec 2025 by G. Torres Mendonça (guilherme.torresmendonca@ime.usp.br)
 """
 
 import math
@@ -24,6 +25,8 @@ import cartopy.crs as ccrs
 import argparse
 
 from tqdm import tqdm
+
+from multiprocessing import Pool
 
 def add_mpas_mesh_variables(ds, full=True, **kwargs):
     for v in ds.data_vars:
@@ -202,7 +205,85 @@ def colorvalue(val, da, vmin=None, vmax=None, cmap='Spectral_r'):
 
     return cm(norm_val)
 
-def plot_cells_mpas(da, ds, ax, plotEdge=True, gridfile=None, **plot_kwargs):
+def plot_cells_chunk_parallel(chunk, da_values, vertices, num_sides, lats, lons, plot_kwargs, plotEdge):
+    polygons = []
+    colors = []
+    for cell in chunk:
+        value = da_values[cell]
+
+        cell_vertices = vertices[cell, :num_sides[cell]]
+        if 0 in cell_vertices:
+            # Border cell
+            continue
+
+        cell_vertices = cell_vertices - 1  # Adjust indexing
+        cell_lats = lats[cell_vertices]
+        cell_lons = lons[cell_vertices]
+
+        # Set color
+        color = colorvalue(value, None, vmin=plot_kwargs['vmin'], vmax=plot_kwargs['vmax'])
+
+        # Check if there are polygons at the border of the map (+/- 180 longitude)
+        if np.max(cell_lons) > 170 and np.min(cell_lons) < -170:
+            cell_lons = np.where(cell_lons >= 170.0, cell_lons - 360.0, cell_lons)
+
+        polygons.append(np.column_stack((cell_lons, cell_lats)))
+        colors.append(color)
+
+    return polygons, colors
+
+def plot_cells_mpas(da, ds, ax, plotEdge=True, gridfile=None, num_chunks=32, **plot_kwargs):
+    # Check if grid properties are in ds
+    grid_properties = ['verticesOnCell', 'nEdgesOnCell']
+    if set(grid_properties).issubset(set(ds.keys())):
+        print(f"{grid_properties} found in dataset.")
+        ds_grid = ds
+    else:
+        print(f"{grid_properties} not found in dataset. Trying to recover them from additional grid file.")
+        try:
+            ds_grid = open_mpas_file(gridfile)
+            if not set(grid_properties).issubset(set(ds_grid.keys())):
+                raise RuntimeError(f"Recovery of {grid_properties} failed.")
+        except:
+            raise RuntimeError(f"Recovery of {grid_properties} failed.")
+
+    print("Generating grid plot and plotting variable. This may take a while...")
+
+    # Preload data into memory
+    da_values = da.values
+    vertices = ds_grid['verticesOnCell'].values - 1
+    num_sides = ds_grid['nEdgesOnCell'].values
+    lats = ds_grid['latitudeVertex'].values
+    lons = ds_grid['longitudeVertex'].values
+
+    indices = np.arange(len(ds['nCells']))
+    chunks = np.array_split(indices, num_chunks * 4)  # Smaller chunks for better load balancing
+
+    with Pool(processes=num_chunks) as pool:
+        results = pool.starmap(
+            plot_cells_chunk_parallel,
+            [(chunk, da_values, vertices, num_sides, lats, lons, plot_kwargs, plotEdge) for chunk in chunks]
+        )
+
+    polygons = []
+    colors = []
+    for chunk_polygons, chunk_colors in results:
+        polygons.extend(chunk_polygons)
+        colors.extend(chunk_colors)
+
+    # Plot polygons
+    for polygon, color in zip(polygons, colors):
+        if plotEdge:
+            edgecolor = 'grey'
+            lw = 0.1
+        else:
+            edgecolor = None
+            lw = None
+        ax.fill(polygon[:, 0], polygon[:, 1], edgecolor=edgecolor, linewidth=lw, facecolor=color)
+
+    return
+
+def plot_cells_mpas_old(da, ds, ax, plotEdge=True, gridfile=None, **plot_kwargs):
     # da: specific xarray to be plotted (time/level filtered)
     # ds: general xarray with grid structure, require for grid propreties
     # plotEdge: wether the cell edge should be visible or not. For high-resolution grids figure looks better if plotEdge=False
@@ -510,6 +591,11 @@ if __name__ == "__main__":
         + " infile (.nc; for use only when infile does not contain these properties)",
     )
 
+    parser.add_argument(
+        "-nc", type=int, default=1, 
+        help="Number of chunks for parallel processing"
+    )
+
     parser.add_argument('-vmin', default=None)
     parser.add_argument('-vmax', default=None)
 
@@ -539,4 +625,4 @@ if __name__ == "__main__":
                    level=args.level, vname=args.var, plotEdge=plotEdge,
                    clip=clip, gridfile=args.gridfile,
                    lat_min=args.lat_min, lat_max=args.lat_max, lon_min=args.lon_min, lon_max=args.lon_max,
-                   vmin=args.vmin, vmax=args.vmax)
+                   vmin=args.vmin, vmax=args.vmax, num_chunks=args.nc)
