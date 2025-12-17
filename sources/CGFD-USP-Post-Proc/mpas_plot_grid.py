@@ -18,6 +18,9 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from geopy.distance import distance
 
+from matplotlib.collections import PolyCollection
+from multiprocessing import Pool
+
 import argparse
 
 def add_mpas_mesh_variables(ds, full=True, **kwargs):
@@ -141,7 +144,46 @@ def colorvalue(val, cmap='Spectral', vmin=None, vmax=None):
                                         clip=True)(val)
     return cm(norm_val)
 
-def plot_cells_mpas(ds, vname, ax, **plot_kwargs):
+def plot_cells_chunk(chunk, lats, lons, vertices, num_sides, values, plot_kwargs):
+    polygons = []
+    colors = []
+    for i in chunk:
+        cell_vertices = vertices[i, :num_sides[i]]
+        cell_lats = lats[cell_vertices]
+        cell_lons = lons[cell_vertices]
+
+        if np.all(cell_lons >= -179) and np.all(cell_lons <= 179):
+            polygons.append(np.column_stack((cell_lons, cell_lats)))
+            colors.append(colorvalue(values[i], **plot_kwargs))
+    return polygons, colors
+
+def plot_cells_mpas(ds, vname, ax, num_chunks=32, **plot_kwargs):
+    # Preload data into memory
+    values = ds[vname].values
+    vertices = ds['verticesOnCell'].values - 1
+    num_sides = ds['nEdgesOnCell'].values
+    lats = ds['latitudeVertex'].values
+    lons = ds['longitudeVertex'].values
+
+    indices = np.arange(len(ds['nCells']))
+    chunks = np.array_split(indices, num_chunks * 4)  # Smaller chunks for better load balancing
+
+    with Pool(processes=num_chunks) as pool:
+        results = pool.starmap(
+            plot_cells_chunk,
+            [(chunk, lats, lons, vertices, num_sides, values, plot_kwargs) for chunk in chunks]
+        )
+
+    polygons = []
+    colors = []
+    for chunk_polygons, chunk_colors in results:
+        polygons.extend(chunk_polygons)
+        colors.extend(chunk_colors)
+
+    poly_collection = PolyCollection(polygons, facecolors=colors, edgecolor=None, linewidth=0.0)
+    ax.add_collection(poly_collection)
+
+def plot_cells_mpas_old(ds, vname, ax, **plot_kwargs):
     
     # ax = start_cartopy_map_axis()
              
@@ -335,9 +377,15 @@ if __name__ == "__main__":
         "-o", "--outfile", type=str, default=None,
         help="File to save the MPAS plot",
     )
+
+    parser.add_argument(
+        "-nc", type=int, default=1, 
+        help="Number of chunks for parallel processing"
+    )
+
     args = parser.parse_args()
     
     if not os.path.exists(args.grid):
         raise IOError('File does not exist: ' + args.grid)
     
-    view_mpas_mesh(args.grid, outfile=args.outfile)
+    view_mpas_mesh(args.grid, outfile=args.outfile, num_chunks=args.nc)
