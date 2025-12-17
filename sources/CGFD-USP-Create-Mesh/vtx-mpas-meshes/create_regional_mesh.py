@@ -5,7 +5,7 @@ import argparse
 
 # Create ArgumentParser object
 parser = argparse.ArgumentParser(description=
-                                 'Sensitivity test for varying mesh parameters.')
+                                 'Wrapper for creating a global or regional mesh.')
 # Input arguments
 parser.add_argument('--vtx_mpas_meshes_dir', type=str, help='vtx-mpas-meshes directory')
 parser.add_argument('--exp_dir', type=str, help='root directory of experiment')
