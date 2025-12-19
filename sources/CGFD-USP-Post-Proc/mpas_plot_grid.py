@@ -339,6 +339,12 @@ def view_mpas_mesh(mpas_grid_file, outfile=None,
     ax = start_cartopy_map_axis(zorder=2)
     plot_kwargs = set_plot_kwargs(da=ds[vname])
     
+    # Add vmin and vmax from kwargs if they exist
+    if 'vmin' in kwargs:
+        plot_kwargs['vmin'] = kwargs['vmin']
+    if 'vmax' in kwargs:
+        plot_kwargs['vmax'] = kwargs['vmax']
+
      # --------
     tit = vname + ': ' + name + ' (' + str(ncells) + ')'
     array_plot_kwgs = {**plot_kwargs}
@@ -383,9 +389,19 @@ if __name__ == "__main__":
         help="Number of chunks for parallel processing"
     )
 
+    parser.add_argument(
+        "-vmin", type=float, default=None,
+        help="Minimum value for colorbar"
+    )
+
+    parser.add_argument(
+        "-vmax", type=float, default=None,
+        help="Maximum value for colorbar"
+    )
+
     args = parser.parse_args()
     
     if not os.path.exists(args.grid):
         raise IOError('File does not exist: ' + args.grid)
     
-    view_mpas_mesh(args.grid, outfile=args.outfile, num_chunks=args.nc)
+    view_mpas_mesh(args.grid, outfile=args.outfile, num_chunks=args.nc, vmin=args.vmin, vmax=args.vmax)

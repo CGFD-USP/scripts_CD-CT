@@ -26,9 +26,9 @@ EXECS=${DIRHOMED}/execs;               mkdir -p ${EXECS}
 
 # Local variables------------------------------------------------------
 ## Grid file
-GFILEPATH=${DATAIN}/fixed/lat_-15_lon_-65_ellipse_a_2000_b_2000_ang_0_iradius_2000_margin_800_hres_5_lres_15.region.grid.nc
+GFILEPATH=${DATAIN}/fixed/lat_-15_lon_-65_ellipse_a_4000_b_6000_ang_30_iradius_2000_margin_800_hres_5_lres_15.region.grid.nc
 ## Output directory and filename to save plot
-POSTFILEPATH=${DATAIN}/fixed/lat_-15_lon_-65_ellipse_a_2000_b_2000_ang_0_iradius_2000_margin_800_hres_5_lres_15.region.grid.parallelized.png
+POSTFILEPATH=${DATAIN}/fixed/lat_-15_lon_-65_ellipse_a_4000_b_6000_ang_30_iradius_2000_margin_800_hres_5_lres_15.region.grid_with_optm.parallelized.png
 #---------------------------------------------------------------------
 
 cat << EOF0 > plot_grid.bash
@@ -53,7 +53,7 @@ conda config --add envs_dirs /home/guilherme.mendonca/.conda/envs
 echo "Activating conda env..."
 conda activate vtx_env
 echo "Running mpas_plot_grid.py..."
-time python3 ${SOURCES}/CGFD-USP-Post-Proc/mpas_plot_grid.py -g ${GFILEPATH} -o ${POSTFILEPATH} -nc ${GRID_ntasks}
+time python3 ${SOURCES}/CGFD-USP-Post-Proc/mpas_plot_grid.py -g ${GFILEPATH} -o ${POSTFILEPATH} -nc ${GRID_ntasks} -vmin 4 -vmax 19
 
 EOF0
 chmod a+x plot_grid.bash
