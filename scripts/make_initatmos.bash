@@ -1,7 +1,7 @@
 #!/bin/bash 
 
 
-if [ $# -ne 4 ]
+if [ $# -ne 5 ]
 then
    echo ""
    echo "Instructions: execute the command below"
@@ -40,9 +40,10 @@ EXECS=${DIRHOMED}/execs;               mkdir -p ${EXECS}
 
 # Input variables:--------------------------------------
 EXP=${1};         #EXP=GFS
-RES=${2};         #RES=1024002
+MESH=${2};         #RES=1024002
 YYYYMMDDHHi=${3}; #YYYYMMDDHHi=2024012000
 FCST=${4};        #FCST=24
+REGIONAL=${5}     #REGIONAL=Y
 #-------------------------------------------------------
 
 
@@ -54,27 +55,31 @@ export DIRRUN=${DIRHOMED}/run.${YYYYMMDDHHi}; rm -fr ${DIRRUN}; mkdir -p ${DIRRU
 #-------------------------------------------------------
 mkdir -p ${DATAOUT}/${YYYYMMDDHHi}/Pre/logs
 
-
-if [ ! -s ${DATAIN}/fixed/x1.${RES}.graph.info.part.${cores} ]
+if [ ! -s ${DATAIN}/fixed/${MESH}.graph.info.part.${cores} ]
 then
-   if [ ! -s ${DATAIN}/fixed/x1.${RES}.graph.info ]
+   if [[ ${MESH} == x1.* ]]
    then
+      if [ ! -s ${DATAIN}/fixed/${MESH}.graph.info ]
+      then
+         cd ${DATAIN}/fixed
+         echo -e "${GREEN}==>${NC} downloading meshes tgz files ... \n"
+         wget https://www2.mmm.ucar.edu/projects/mpas/atmosphere_meshes/${MESH}.tar.gz
+         wget https://www2.mmm.ucar.edu/projects/mpas/atmosphere_meshes/${MESH}_static.tar.gz
+         tar -xzvf ${MESH}.tar.gz
+         tar -xzvf ${MESH}_static.tar.gz
+      fi
+      echo -e "${GREEN}==>${NC} Creating ${MESH}.graph.info.part.${cores} ... \n"
       cd ${DATAIN}/fixed
-      echo -e "${GREEN}==>${NC} downloading meshes tgz files ... \n"
+      gpmetis -minconn -contig -niter=200 ${MESH}.graph.info ${cores}
+      rm -fr ${MESH}.tar.gz ${MESH}_static.tar.gz
+   else
+      echo -e "${GREEN}==>${NC} Creating ${MESH}.graph.info.part.${cores} ... \n"
       cd ${DATAIN}/fixed
-      wget https://www2.mmm.ucar.edu/projects/mpas/atmosphere_meshes/x1.${RES}.tar.gz
-      wget https://www2.mmm.ucar.edu/projects/mpas/atmosphere_meshes/x1.${RES}_static.tar.gz
-      tar -xzvf x1.${RES}.tar.gz
-      tar -xzvf x1.${RES}_static.tar.gz
+      gpmetis -minconn -contig -niter=200 ${MESH}.graph.info ${cores}
    fi
-   echo -e "${GREEN}==>${NC} Creating x1.${RES}.graph.info.part.${cores} ... \n"
-   cd ${DATAIN}/fixed
-   gpmetis -minconn -contig -niter=200 x1.${RES}.graph.info ${cores}
-   rm -fr x1.${RES}.tar.gz x1.${RES}_static.tar.gz
 fi
 
-
-files_needed=("${SCRIPTS}/namelists/namelist.init_atmosphere.TEMPLATE" "${SCRIPTS}/namelists/streams.init_atmosphere.TEMPLATE" "${DATAIN}/fixed/x1.${RES}.graph.info.part.${cores}" "${DATAIN}/fixed/x1.${RES}.static.nc" "${DATAOUT}/${YYYYMMDDHHi}/Pre/${EXP}:${start_date:0:13}" "${EXECS}/init_atmosphere_model")
+files_needed=("${SCRIPTS}/namelists/namelist.init_atmosphere.TEMPLATE" "${SCRIPTS}/namelists/streams.init_atmosphere.TEMPLATE" "${DATAIN}/fixed/${MESH}.graph.info.part.${cores}" "${DATAIN}/fixed/${MESH}.static.nc" "${DATAOUT}/${YYYYMMDDHHi}/Pre/${EXP}:${start_date:0:13}" "${EXECS}/init_atmosphere_model")
 for file in "${files_needed[@]}"
 do
   if [ ! -s "${file}" ]
@@ -85,16 +90,21 @@ do
   fi
 done
 
+if [[ $REGIONAL == "Y" ]]; then
+   BLEND_BDY_TERRAIN=true
+else
+   BLEND_BDY_TERRAIN=false
+fi
 
-sed -e "s,#LABELI#,${start_date},g;s,#GEODAT#,${GEODATA},g;s,#RES#,${RES},g" \
+sed -e "s,#LABELI#,${start_date},g;s,#GEODAT#,${GEODATA},g;s,#MESH#,${MESH},g;s,#EXP#,${EXP},g;s,#BLEND_BDY_TERRAIN#,${BLEND_BDY_TERRAIN},g" \
 	 ${SCRIPTS}/namelists/namelist.init_atmosphere.TEMPLATE > ${DIRRUN}/namelist.init_atmosphere
 
-sed -e "s,#RES#,${RES},g" \
+sed -e "s,#MESH#,${MESH},g" \
     ${SCRIPTS}/namelists/streams.init_atmosphere.TEMPLATE > ${DIRRUN}/streams.init_atmosphere
 
 
-cp -f ${DATAIN}/fixed/x1.${RES}.graph.info.part.${cores} ${DIRRUN}
-cp -f ${DATAIN}/fixed/x1.${RES}.static.nc ${DIRRUN}
+cp -f ${DATAIN}/fixed/${MESH}.graph.info.part.${cores} ${DIRRUN}
+cp -f ${DATAIN}/fixed/${MESH}.static.nc ${DIRRUN}
 cp -f ${DATAOUT}/${YYYYMMDDHHi}/Pre/${EXP}\:${start_date:0:13} ${DIRRUN}
 cp -f ${EXECS}/init_atmosphere_model ${DIRRUN}
 
@@ -131,10 +141,10 @@ time mpirun -np \${SLURM_NTASKS} ./\${executable}
 date
 
 
-mv ${DIRRUN}/log.init_atmosphere.0000.out ${DATAOUT}/${YYYYMMDDHHi}/Pre/logs/log.init_atmosphere.0000.x1.${RES}.init.nc.${YYYYMMDDHHi}.out
+mv ${DIRRUN}/log.init_atmosphere.0000.out ${DATAOUT}/${YYYYMMDDHHi}/Pre/logs/log.init_atmosphere.0000.${MESH}.init.nc.${YYYYMMDDHHi}.out
 mv ${DIRRUN}/namelist.init_atmosphere ${DATAOUT}/${YYYYMMDDHHi}/Pre/logs
 mv ${DIRRUN}/streams.init_atmosphere ${DATAOUT}/${YYYYMMDDHHi}/Pre/logs
-mv ${DIRRUN}/x1.${RES}.init.nc ${DATAOUT}/${YYYYMMDDHHi}/Pre
+mv ${DIRRUN}/${MESH}.init.nc ${DATAOUT}/${YYYYMMDDHHi}/Pre
 
 EOF0
 chmod a+x ${DIRRUN}/initatmos.bash
@@ -144,7 +154,7 @@ cd ${DIRRUN}
 sbatch --wait ${DIRRUN}/initatmos.bash
 mv ${DIRRUN}/initatmos.bash ${DATAOUT}/${YYYYMMDDHHi}/Pre/logs
 
-if [ ! -s ${DATAOUT}/${YYYYMMDDHHi}/Pre/x1.${RES}.init.nc ]
+if [ ! -s ${DATAOUT}/${YYYYMMDDHHi}/Pre/${MESH}.init.nc ]
 then
   echo -e  "\n${RED}==>${NC} ***** ATTENTION *****\n"	
   echo -e  "${RED}==>${NC} Init Atmosphere phase fails! Check logs at ${DATAOUT}/logs/initatmos.* .\n"

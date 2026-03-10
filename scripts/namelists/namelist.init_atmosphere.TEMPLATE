@@ -13,7 +13,7 @@
 /
 &data_sources
     config_geog_data_path = '#GEODAT#'
-    config_met_prefix = 'GFS'
+    config_met_prefix = '#EXP#'
     config_sfc_prefix = 'SST'
     config_fg_interval = 86400
     config_landuse_data = 'MODIFIED_IGBP_MODIS_NOAH'
@@ -27,6 +27,7 @@
     config_dzmin = 0.3
     config_nsm = 30
     config_tc_vertical_grid = true
+    config_blend_bdy_terrain = #BLEND_BDY_TERRAIN#
 /
 &interpolation_control
     config_extrap_airtemp = 'linear'
@@ -44,5 +45,5 @@
     config_pio_stride = 1
 /
 &decomposition
-    config_block_decomp_file_prefix = 'x1.#RES#.graph.info.part.'
+    config_block_decomp_file_prefix = '#MESH#.graph.info.part.'
 /
