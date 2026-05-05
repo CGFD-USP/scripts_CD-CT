@@ -193,7 +193,121 @@ def constant_resolution_global(**kwargs):
 
     return dists, resol, kwargs
 
-def ellipse_variable_resolution_global(lat_values, lon_values, **kwargs):
+def ellipse_variable_resolution(lat_values, lon_values, **kwargs):
+    """
+    Create a resolution map (2D, lat x lon) where the refined region is an
+    ellipse instead of a circle.
+
+    Parameters provided via kwargs (defaults set to be compatible with other functions):
+      - lowresolution, highresolution: outer and inner target resolutions (km)
+      - size: used as default semi-major axis if a_km not set (km)
+      - a_km: semi-major axis length in km (if not set, defaults to 'size')
+      - b_km: semi-minor axis length in km (if not set, defaults to 'size')
+      - angle: rotation angle in degrees CCW from east for the ellipse
+      - delta: transition width in normalized ellipse units (unitless, typical 0.05-0.2)
+      - margin: extra margin added to radius computation (km)
+      - num_boundary_layers: used to compute buffer like other functions
+      - lat_ref, lon_ref: ellipse center (degrees)
+    Returns:
+      - size_map: 2D numpy array with shape (nlat, nlon) with resolution in km
+      - kwargs: updated kwargs with keys like 'radius' and 'border'
+    """
+    # defaults
+    defaults = {'lowresolution': 25,
+                'highresolution': 3,
+                'size': 40,
+                'margin': 100,
+                'final_res_dist': 1000,
+                'angle': 0.0,
+                'delta': 0.12,
+                'a_km': None,
+                'b_km': None,
+                }
+
+    for name, default in defaults.items():
+        if kwargs.get(name, None) is None:
+            kwargs[name] = default
+
+    # fallback a/b to 'size' if not provided
+    a_km = kwargs.get('a_km') or kwargs.get('size')
+    b_km = kwargs.get('b_km') or kwargs.get('size')
+    angle_deg = kwargs.get('angle', 0.0)
+    delta = kwargs.get('delta', 0.12)
+
+    if a_km <= 0 or b_km <= 0:
+        raise ValueError("Ellipse semi-axes a_km and b_km must be > 0")
+    if delta <= 0:
+        raise ValueError("delta must be > 0 (use small value for sharp transition)")
+
+    # Build 2D lat/lon mesh (lat_values and lon_values are 1D arrays of coords)
+    lats = np.asarray(lat_values)
+    lons = np.asarray(lon_values)
+    Lon, Lat = np.meshgrid(lons, lats)  # shapes (nlat, nlon)
+
+    # center / reference
+    lat_ref = kwargs.get('lat_ref', 0.0)
+    lon_ref = kwargs.get('lon_ref', 0.0)
+    kwargs['lat_ref'] = lat_ref
+    kwargs['lon_ref'] = lon_ref
+
+    # Earth radius in km
+    earth_radius_km = kwargs.get('earth_radius_km', 6371.0)
+
+    # Convert degrees to radians
+    lat = np.radians(Lat)
+    lon = np.radians(Lon)
+    latc = np.radians(lat_ref)
+    lonc = np.radians(lon_ref)
+
+    # Normalize dlon to [-pi,pi] to facilitate calculations
+    ## Get distance to reference longitude
+    dlon = lon - lonc
+    ## Shift range to [0,2pi], then wrap values to [-pi,pi]
+    dlon = (dlon + np.pi) % (2.0 * np.pi) - np.pi
+
+    # Local tangent-plane (East, North) approximation (in km)
+    dx = earth_radius_km * np.cos(latc) * dlon
+    dy = earth_radius_km * (lat - latc)
+
+    # Rotate coordinates by -angle to align dx and dy with ellipse axes
+    theta = np.deg2rad(angle_deg)
+    c = np.cos(theta)
+    s = np.sin(theta)
+    x_local =  c * dx + s * dy
+    y_local = -s * dx + c * dy
+
+    # Normalized elliptical coordinate phi = sqrt((x/a)^2 + (y/b)^2)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        phi = np.hypot(x_local / a_km, y_local / b_km)
+
+    # Smooth transition using smoothstep between phi=1 and phi=1+delta
+    ## Compute elliptical distance from ellipse boundary (phi=1) normalized by delta
+    t = (phi - 1.0) / delta
+    ## Ensure that t is clamped to [0,1] for the smoothstep function below
+    t_clamped = np.clip(t, 0.0, 1.0)
+    ## Apply smoothstep function to get smooth transition between 0 and 1
+    smooth = 3.0 * t_clamped**2 - 2.0 * t_clamped**3
+
+    s_min = kwargs.get('highresolution')
+    s_max = kwargs.get('lowresolution')
+
+    size_map = s_min + (s_max - s_min) * smooth
+
+    # enforce exact inside/outside values
+    inside_mask = (phi <= 1.0)
+    size_map[inside_mask] = s_min
+    outside_mask = (phi >= 1.0 + delta)
+    size_map[outside_mask] = s_max
+
+    # Update radius/border attributes in kwargs to be consistent with other functions
+    # Use max semi-axis as representative radius for downstream tools that expect a scalar radius
+    kwargs['radius'] = max(a_km, b_km) + kwargs.get('margin', 100)
+    kwargs['buffer'] = kwargs.get('num_boundary_layers', 0) * kwargs.get('lowresolution', 25)
+    kwargs['border'] = kwargs['radius'] + kwargs['buffer']
+
+    return size_map, kwargs
+
+def ellipse_variable_resolution_smoothstep(lat_values, lon_values, **kwargs):
     """
     Create a resolution map (2D, lat x lon) where the refined region is an
     ellipse instead of a circle.
@@ -317,7 +431,6 @@ def variable_resolution_latlonmap(grid, do_region, **kwargs):
         dist_degrees = highresolution / 1000 #110.
     elif grid == 'doughnut' or grid == 'ellipse':
         dist_degrees = highresolution / 200
-       
 
     nlat = int(180. / dist_degrees) + 1
     nlon = int(360. / dist_degrees) + 1
@@ -375,11 +488,16 @@ def variable_resolution_latlonmap(grid, do_region, **kwargs):
             ds['resolution'] = apply_resolution_at_distance(
             ds['distance'], ref_points=dists, ref_resolutions=resol)
     elif grid == 'ellipse':
-        # Ellipse uses a lat/lon-aware 2D computation, not a simple radial mapping.
-        print('\tComputing resolutions using technique %s, global.' % grid)
-        size_map, kwargs = ellipse_variable_resolution_global(
-            ds.coords['lat'].values, ds.coords['lon'].values, **kwargs)
-        ds['resolution'] = xr.DataArray(data=size_map, dims=('lat', 'lon'))
+        if do_region == 'y':
+            print('\tComputing resolutions using technique %s, regional.' % grid)
+            size_map, kwargs = ellipse_variable_resolution(
+                ds.coords['lat'].values, ds.coords['lon'].values, **kwargs)
+            ds['resolution'] = xr.DataArray(data=size_map, dims=('lat', 'lon'))
+        elif do_region == 'n':
+            print('\tComputing resolutions using technique %s, global.' % grid)
+            size_map, kwargs = ellipse_variable_resolution_global(
+                ds.coords['lat'].values, ds.coords['lon'].values, **kwargs)
+            ds['resolution'] = xr.DataArray(data=size_map, dims=('lat', 'lon'))
     else:
         raise ValueError('!! Grid %s not implemented.' % grid)
 
