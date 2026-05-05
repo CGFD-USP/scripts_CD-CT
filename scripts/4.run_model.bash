@@ -15,7 +15,7 @@
 #
 #-----------------------------------------------------------------------------#
 
-if [ $# -ne 5 -a $# -ne 1 ]
+if [ $# -ne 6 -a $# -ne 1 ]
 then
    echo ""
    echo "Instructions: execute the command below"
@@ -60,6 +60,8 @@ MESH=${2};         #MESH
 YYYYMMDDHHi=${3}; #YYYYMMDDHHi=2024012000
 FCST=${4};        #FCST=6
 RES=${5};          #RES(km)    
+REGIONAL=${6};     #REGIONAL=Y
+LBCINT=${7}        #LBCINT=3600
 #-------------------------------------------------------
 mkdir -p ${DATAOUT}/${YYYYMMDDHHi}/Model/logs
 
@@ -121,6 +123,18 @@ else
     echo -e  "${RED}==>${NC} [${0}] Simulation parameters for resolution $RES have not been set! \n"
     exit -1
 fi
+
+# Setting configuration to apply or not lateral boundary conditions
+if [[ $REGIONAL == "Y" ]]; then
+   APPLY_LBCS=true
+elif [[ $REGIONAL == "N" ]]; then
+   APPLY_LBCS=false
+else
+   echo -e  "\n${RED}==>${NC} ***** ATTENTION *****\n"
+   echo -e  "${RED}==>${NC} Atmosphere phase fails! Please select REGIONAL=Y or REGIONAL=N so that MONAN knows whether to read or not lateral boundary conditions.\n"
+   echo -e  "${RED}==>${NC} Exiting script. \n"
+   exit -1
+fi
 #-------------------------------------------------------
 
 
@@ -173,15 +187,17 @@ cp -f ${DATAIN}/fixed/*DATA ${DIRRUN}
 cp -f ${DATAIN}/fixed/${MESH}.graph.info.part.${cores} ${DIRRUN}
 cp -f ${DATAOUT}/${YYYYMMDDHHi}/Pre/${MESH}.init.nc ${DIRRUN}
 cp -f ${DATAIN}/fixed/Vtable.GFS ${DIRRUN}
-
+if [[ $REGIONAL == "Y" ]]; then
+   cp -f ${DATAOUT}/${YYYYMMDDHHi}/Pre/lbc*.nc ${DIRRUN}
+fi
 
 if [[ ${EXP} == "GFS" ||  ${EXP} == "ERA5" ]]
 then
    sed -e "s,#LABELI#,${start_date},g;s,#FCSTS#,${DD_HHMMSS_forecast},g;s,#MESH#,${MESH},g;
-s,#CONFIG_DT#,${CONFIG_DT},g;s,#CONFIG_LEN_DISP#,${CONFIG_LEN_DISP},g;s,#CONFIG_CONV_INTERVAL#,${CONFIG_CONV_INTERVAL},g" \
+s,#CONFIG_DT#,${CONFIG_DT},g;s,#CONFIG_LEN_DISP#,${CONFIG_LEN_DISP},g;s,#CONFIG_CONV_INTERVAL#,${CONFIG_CONV_INTERVAL},g;s,#APPLY_LBCS#,${APPLY_LBCS},g" \
    ${SCRIPTS}/namelists/namelist.atmosphere.TEMPLATE > ${DIRRUN}/namelist.atmosphere
    
-   sed -e "s,#MESH#,${MESH},g;s,#CIORIG#,${EXP},g;s,#LABELI#,${YYYYMMDDHHi},g;s,#NLEV#,${NLEV},g" \
+   sed -e "s,#MESH#,${MESH},g;s,#LBCINT#,${LBCINT},g;s,#CIORIG#,${EXP},g;s,#LABELI#,${YYYYMMDDHHi},g;s,#NLEV#,${NLEV},g" \
    ${SCRIPTS}/namelists/streams.atmosphere.TEMPLATE > ${DIRRUN}/streams.atmosphere
 elif [[ ${EXP} == IDEALIZED* ]]
 then
@@ -189,7 +205,7 @@ then
 s,#CONFIG_DT#,${CONFIG_DT},g;s,#CONFIG_LEN_DISP#,${CONFIG_LEN_DISP},g;s,#CONFIG_CONV_INTERVAL#,${CONFIG_CONV_INTERVAL},g" \
    ${SCRIPTS}/namelists/namelist.atmosphere.TEMPLATE_IDEALIZED > ${DIRRUN}/namelist.atmosphere
 
-   sed -e "s,#MESH#,${MESH},g;s,#CIORIG#,${EXP},g;s,#LABELI#,${YYYYMMDDHHi},g;s,#NLEV#,${NLEV},g" \
+   sed -e "s,#MESH#,${MESH},g;s,#LBCINT#,${LBCINT},g;s,#CIORIG#,${EXP},g;s,#LABELI#,${YYYYMMDDHHi},g;s,#NLEV#,${NLEV},g" \
    ${SCRIPTS}/namelists/streams.atmosphere.TEMPLATE > ${DIRRUN}/streams.atmosphere
 fi
 cp -f ${SCRIPTS}/namelists/stream_list.atmosphere.output ${DIRRUN}

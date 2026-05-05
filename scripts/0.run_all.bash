@@ -42,13 +42,13 @@ EXECS=${DIRHOMED}/execs;               mkdir -p ${EXECS}
 github_link="https://github.com/monanadmin/MONAN-Model.git"
 monan_branch=release/1.4.1-rc
 convertmpas_branch=release/1.2.0
-EXP=IDEALIZED2
-YYYYMMDDHHi=2025121700
-FCST=360
-MESH=lat_-15_lon_-65_ellipse_a_4000_b_6000_ang_30_iradius_2000_margin_800_hres_5_lres_15.region
-RES=5 #3 # Minimum grid spacing (km)
-REGIONAL=N   # Whether to run reigonal simulation
-LBCSINT=3600 # Interval (seconds) for updating lateral boundary conditions (when regional)
+EXP=ERA5
+YYYYMMDDHHi=2007062200
+FCST=72
+MESH=lat_-35_lon_-55_oradius_2800_iradius_2000_margin_800_hres_50_lres_250.region
+RES=50 #3 # Minimum grid spacing (km)
+REGIONAL=Y   # Whether to run reigonal simulation
+LBCSINT=21600 # Interval (seconds) for updating lateral boundary conditions (when regional)
 #----------------------------------------------------------------------
 
 
@@ -61,11 +61,11 @@ LBCSINT=3600 # Interval (seconds) for updating lateral boundary conditions (when
 #exit
 
 # STEP 3: Executing the pre-processing phase. Preparing all CI/CC files needed:time ${SCRIPTS}/3.pre_processing.bash ${EXP} ${RES} ${YYYYMMDDHHi} ${FCST} ${MESH} 
-time ${SCRIPTS}/3.pre_processing.bash ${EXP} ${MESH} ${YYYYMMDDHHi} ${FCST} ${REGIONAL} ${LBCSINT}
+#time ${SCRIPTS}/3.pre_processing.bash ${EXP} ${MESH} ${YYYYMMDDHHi} ${FCST} ${REGIONAL} ${LBCSINT}
 #exit
 
 # STEP 4: Executing the Model run:
-#time ${SCRIPTS}/4.run_model.bash ${EXP} ${MESH} ${YYYYMMDDHHi} ${FCST} ${RES} 
+time ${SCRIPTS}/4.run_model.bash ${EXP} ${MESH} ${YYYYMMDDHHi} ${FCST} ${RES} 
 #exit
 
 # STEP 5: Executing the Post of Model run:
