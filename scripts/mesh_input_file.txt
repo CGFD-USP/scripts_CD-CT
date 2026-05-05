@@ -7,24 +7,25 @@ vtx_mpas_meshes_dir=/mnt/beegfs/guilherme.mendonca/scripts_CD-CT/sources/CGFD-US
 ## Folder to save generated meshes
 meshes_dir=/mnt/beegfs/guilherme.mendonca/scripts_CD-CT/datain/fixed
 ## Coordinates of mesh center
-lon=-65
-lat=-15
+lon=-45.009
+lat=-22.665
 ## Inner and outer radius (km)
 inner_radius=2000
 outer_radius=2800
 ## Number of external layers for r > outer_radius
 n_layers=8
 ## High resolution for r < inner_radius
-high_res=5
+high_res=50
 ## Low resolution for r > outer_radius
-low_res=15
+low_res=250
 ## Whether to cut regional mesh (y/n)
-do_regional=n
+do_regional=y
 ## Grid type (doughnut/constant)
 grid_type=ellipse
 ## Ellipse parameters
-a_km=4000
-b_km=6000
-angle=30
+a_km=1500
+b_km=2200
+angle=-45
 delta=0.12
 # Automatic additions
+file_name=lat_-23_lon_-45_ellipse_a_1500_b_2200_ang_-45_iradius_2000_margin_800_hres_50_lres_250.region
