@@ -273,31 +273,29 @@ def ellipse_variable_resolution(lat_values, lon_values, **kwargs):
     theta = np.deg2rad(angle_deg)
     c = np.cos(theta)
     s = np.sin(theta)
-    x_local =  c * dx + s * dy
-    y_local = -s * dx + c * dy
+    dx_local =  c * dx + s * dy
+    dy_local = -s * dx + c * dy
 
     # Normalized elliptical coordinate phi = sqrt((x/a)^2 + (y/b)^2)
     with np.errstate(divide='ignore', invalid='ignore'):
-        phi = np.hypot(x_local / a_km, y_local / b_km)
+        phi = np.hypot(dx_local / a_km, dy_local / b_km)
 
-    # Smooth transition using smoothstep between phi=1 and phi=1+delta
-    ## Compute elliptical distance from ellipse boundary (phi=1) normalized by delta
-    t = (phi - 1.0) / delta
-    ## Ensure that t is clamped to [0,1] for the smoothstep function below
-    t_clamped = np.clip(t, 0.0, 1.0)
-    ## Apply smoothstep function to get smooth transition between 0 and 1
-    smooth = 3.0 * t_clamped**2 - 2.0 * t_clamped**3
-
-    s_min = kwargs.get('highresolution')
-    s_max = kwargs.get('lowresolution')
-
-    size_map = s_min + (s_max - s_min) * smooth
-
-    # enforce exact inside/outside values
-    inside_mask = (phi <= 1.0)
-    size_map[inside_mask] = s_min
-    outside_mask = (phi >= 1.0 + delta)
-    size_map[outside_mask] = s_max
+    # Linear transition between phi=1 and phi=1+delta
+    ## Min and max grid-spacing
+    d_min = kwargs.get('highresolution')
+    d_max = kwargs.get('lowresolution')
+    ## Slope of linear transition
+    slope = (d_max - d_min)/delta
+    ## Calculate grid-spacing (resolution) map
+    ### Initialize resol_map with zeros (same shape as phi)
+    resol_map = np.zeros_like(phi)
+    ### Condition 1: phi < 1
+    resol_map[phi < 1] = d_min
+    ### Condition 2: 1 <= phi < 1 + delta
+    mask_middle = (phi >= 1) & (phi < 1 + delta)
+    resol_map[mask_middle] = d_min + slope * (phi[mask_middle] - 1)
+    ### Condition 3: phi >= 1 + delta
+    resol_map[phi >= 1 + delta] = d_max
 
     # Update radius/border attributes in kwargs to be consistent with other functions
     # Use max semi-axis as representative radius for downstream tools that expect a scalar radius
@@ -305,7 +303,7 @@ def ellipse_variable_resolution(lat_values, lon_values, **kwargs):
     kwargs['buffer'] = kwargs.get('num_boundary_layers', 0) * kwargs.get('lowresolution', 25)
     kwargs['border'] = kwargs['radius'] + kwargs['buffer']
 
-    return size_map, kwargs
+    return resol_map, kwargs
 
 def ellipse_variable_resolution_smoothstep(lat_values, lon_values, **kwargs):
     """
@@ -490,14 +488,14 @@ def variable_resolution_latlonmap(grid, do_region, **kwargs):
     elif grid == 'ellipse':
         if do_region == 'y':
             print('\tComputing resolutions using technique %s, regional.' % grid)
-            size_map, kwargs = ellipse_variable_resolution(
+            resol_map, kwargs = ellipse_variable_resolution(
                 ds.coords['lat'].values, ds.coords['lon'].values, **kwargs)
-            ds['resolution'] = xr.DataArray(data=size_map, dims=('lat', 'lon'))
+            ds['resolution'] = xr.DataArray(data=resol_map, dims=('lat', 'lon'))
         elif do_region == 'n':
             print('\tComputing resolutions using technique %s, global.' % grid)
-            size_map, kwargs = ellipse_variable_resolution_global(
+            resol_map, kwargs = ellipse_variable_resolution(
                 ds.coords['lat'].values, ds.coords['lon'].values, **kwargs)
-            ds['resolution'] = xr.DataArray(data=size_map, dims=('lat', 'lon'))
+            ds['resolution'] = xr.DataArray(data=resol_map, dims=('lat', 'lon'))
     else:
         raise ValueError('!! Grid %s not implemented.' % grid)
 
