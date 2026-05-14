@@ -399,7 +399,7 @@ def ellipse_constant_resolution(lat_values, lon_values, **kwargs):
     ## generated efficiently.
     ## For that, following the example of the function constant_resolution, we will
     ## ask for a slope of 0.05 km(grid-spacing increase)/km(distance increase along minor axis).
-    slope_xmax = 0.05
+    slope_xmax = 0.1
     ## Now, we calculate the xmax at which we want to reach the final_res_dist resolution
     deltares = kwargs['final_res_dist'] - kwargs['highresolution']
     xmax = a_km + deltares / slope_xmax
@@ -410,7 +410,7 @@ def ellipse_constant_resolution(lat_values, lon_values, **kwargs):
     delta_max = np.hypot(xmax/a_km, ymax/b_km) - 1
     ## Now, define min and max grid-spacing
     d_min = kwargs.get('highresolution')
-    d_max = kwargs.get('lowresolution')
+    d_max = kwargs['final_res_dist']
     ## Finally, calculate grid-spacing (resolution) map
     ### Initialize resol_map with zeros (same shape as phi)
     resol_map = np.zeros_like(phi)
@@ -550,14 +550,15 @@ def variable_resolution_latlonmap(grid, do_region, **kwargs):
     highresolution = kwargs.get('highresolution', 10.)  # grid size in km
     print('\tResolution in km of lat/lon grid: %.1f' % highresolution)
     
-    if grid == 'constant':
-        dist_degrees = highresolution / 1000 #110.
-    elif grid == 'doughnut' or grid == 'ellipse':
-        dist_degrees = highresolution / 200
+    # Convert highresolution in km to degrees (approximate, valid near the equator)
+    dist_degrees = highresolution / 110.
 
+    # Now, assuming a regular grid, we calculate how many points we need so that cells
+    # with this highresolution value cover the whole globe
     nlat = int(180. / dist_degrees) + 1
     nlon = int(360. / dist_degrees) + 1
 
+    # Generate now such a grid
     ds = xr.Dataset(
         coords={
             'lat': np.linspace(-90., 90., nlat),
@@ -607,7 +608,7 @@ def variable_resolution_latlonmap(grid, do_region, **kwargs):
             ds['distance'], ref_points=dists, ref_resolutions=resol)
         elif do_region == 'n':
             print('\tComputing resolutions using technique %s, global.' % grid)
-            dists, resol, kwargs = constant_resolution_global(**kwargs)
+            dists, resol, kwargs = ellipse_variable_resolution(**kwargs)
             ds['resolution'] = apply_resolution_at_distance(
             ds['distance'], ref_points=dists, ref_resolutions=resol)
     elif grid == 'ellipse':
@@ -1017,16 +1018,16 @@ def full_generation_process_gtm(mpas_grid_file, grid, redo=True,
     else:
         duration_region = 0.
         os.system('mv ' + tmp_mesh_file + ' ' + mpas_grid_file)
-        os.system('mv ' + tmp_mesh_info + ' ' + graph_info_file)
+        os.system('mv ' + tmp_graph_info + ' ' + graph_info_file)
 
     # Open dataset and update attributes
     mpas_ds = xr.open_dataset(mpas_grid_file)
     for name, value in resolution_ds.attrs.items():
         mpas_ds.attrs['vtx-param-' + str(name)] = value
     if do_region == 'y':
-        mpas_ds.attrs['vtx-region-num_boundary_layers'] = num_boundary_layers
+        mpas_ds.attrs['vtx-region-num_boundary_layers'] = kwargs.get('num_boundary_layers')
         lowres = mpas_ds.attrs['vtx-param-lowresolution']
-        region_border = radius + (num_boundary_layers * lowres) #* 0.6
+        region_border = radius + (kwargs.get('num_boundary_layers') * lowres) #* 0.6
         mpas_ds.attrs['vtx-region_border'] = region_border
 
     # Update the duration of the steps
