@@ -80,7 +80,7 @@ def start_cartopy_map_axis(zorder=1):
     add_cartopy_details(ax, zorder=zorder)
     return ax
 
-def add_cartopy_details(ax, zorder=1):
+def add_cartopy_details(ax, zorder=1, tick_labelsize=16):
     ax.add_feature(cfeature.BORDERS, linestyle=':', zorder=zorder)
     ax.coastlines(resolution='10m', zorder=zorder+1)
 
@@ -88,6 +88,10 @@ def add_cartopy_details(ax, zorder=1):
                       zorder=zorder+2)
     gl.top_labels = False
     gl.right_labels = False
+
+    # Set the font size for gridline labels
+    gl.xlabel_style = {'size': tick_labelsize}
+    gl.ylabel_style = {'size': tick_labelsize}
     
 def set_plot_kwargs(da=None, list_darrays=None, **kwargs):
     plot_kwargs = {k: v for k, v in kwargs.items()
@@ -95,7 +99,7 @@ def set_plot_kwargs(da=None, list_darrays=None, **kwargs):
                    and v is not None}
 
     if 'cmap' not in plot_kwargs:
-        plot_kwargs['cmap'] = 'Spectral'
+        plot_kwargs['cmap'] = 'summer' #'viridis' #'Spectral'
 
     vmin = plot_kwargs.get('vmin', None)
     if vmin is None:
@@ -118,7 +122,7 @@ def set_plot_kwargs(da=None, list_darrays=None, **kwargs):
 
     return plot_kwargs
 
-def colorvalue(val, cmap='Spectral', vmin=None, vmax=None):
+def colorvalue(val, cmap='summer', vmin=None, vmax=None):
     """
     Given a value and the range max, min, it returns the associated
     color of the desired cmap.
@@ -157,7 +161,7 @@ def plot_cells_chunk(chunk, lats, lons, vertices, num_sides, values, plot_kwargs
             colors.append(colorvalue(values[i], **plot_kwargs))
     return polygons, colors
 
-def plot_cells_mpas(ds, vname, ax, num_chunks=32, **plot_kwargs):
+def plot_cells_mpas(ds, vname, ax, num_chunks=128, **plot_kwargs):
     # Preload data into memory
     values = ds[vname].values
     vertices = ds['verticesOnCell'].values - 1
@@ -180,7 +184,7 @@ def plot_cells_mpas(ds, vname, ax, num_chunks=32, **plot_kwargs):
         polygons.extend(chunk_polygons)
         colors.extend(chunk_colors)
 
-    poly_collection = PolyCollection(polygons, facecolors=colors, edgecolor=None, linewidth=0.0)
+    poly_collection = PolyCollection(polygons, facecolors=colors, edgecolor="black", linewidth=0.01)
     ax.add_collection(poly_collection)
 
 def plot_cells_mpas_old(ds, vname, ax, **plot_kwargs):
@@ -249,8 +253,16 @@ def add_colorbar(axs, fig=None, label=None, **plot_kwargs):
             cmap=plot_kwargs['cmap']),
         ax=axs[:, :], shrink=0.6)
     cbar.ax.locator_params(nbins=10)
+
+    if plot_kwargs['vmin'] is not None and plot_kwargs['vmax'] is not None:
+        # Explicitly set ticks to include the start and end of the color range
+        ticks = np.linspace(plot_kwargs['vmin'], plot_kwargs['vmax'], num=7)
+        cbar.set_ticks(ticks)
+
     if label is not None:
-        cbar.set_label(label)
+        cbar.set_label(label, fontsize=16)
+        # Increase the font size of the colorbar ticks
+        cbar.ax.tick_params(labelsize=16)
 
     return
 
@@ -265,7 +277,7 @@ def close_plot(fig=None, size_fig=None, pdf=None, outfile=None,
     fig.set_size_inches(size_fig)
 
     if outfile is not None:
-        plt.savefig(outfile, dpi=800)
+        plt.savefig(outfile, dpi=3200)
 
     if pdf is not None:
         pdf.savefig(fig, dpi=800)
@@ -293,9 +305,10 @@ def plot_mpas_darray(ds, vname, ax=None, outfile=None, **kwargs):
     # if ax is None:
     #     final = True
     #     ax = start_cartopy_map_axis()
-        
-    ax.set_extent([-180.0, 180,-90.0, 90.0],
-                  crs=ccrs.PlateCarree())
+    
+    # Apply zoom here if provided
+    zoom_extent = kwargs.get('zoom_extent', [-180.0, 180, -90.0, 90.0])
+    ax.set_extent(zoom_extent, crs=ccrs.PlateCarree())
     
     plot_kwargs = set_plot_kwargs(da=da, **kwargs)
     
@@ -314,7 +327,7 @@ def plot_mpas_darray(ds, vname, ax=None, outfile=None, **kwargs):
     title = title.replace('<VAR>', vname).replace('<UNITS>', units)
     title = title.replace('<NAME>', name).replace('<NCELLS>', ncells)
     title = vname
-    ax.set_title(title)
+    #ax.set_title(title)
     
     # if final:
     #     title_legend = kwargs.get('title_legend', '<VAR>: <UNITS>')
@@ -360,6 +373,13 @@ def view_mpas_mesh(mpas_grid_file, outfile=None,
                      border_radius=border_radius, **array_plot_kwgs)
     
     add_colorbar(ax, label=vname + ' (' + units + ')', **plot_kwargs)
+    
+    # Apply zoom here if provided
+    print ("Applying zoom extent in view_mpas_mesh:")
+    zoom_extent = kwargs.get('zoom_extent', [-180.0, 180, -90.0, 90.0])
+    print (zoom_extent)
+    ax.set_extent(zoom_extent, crs=ccrs.PlateCarree())
+    
     close_plot(outfile=outfile)
         
     
@@ -402,9 +422,24 @@ if __name__ == "__main__":
         help="Maximum value for colorbar"
     )
 
+    # Zoom arguments
+    parser.add_argument("-lat_min", type=float, default=None, help="Minimum latitude for zoom")
+    parser.add_argument("-lat_max", type=float, default=None, help="Maximum latitude for zoom")
+    parser.add_argument("-lon_min", type=float, default=None, help="Minimum longitude for zoom")
+    parser.add_argument("-lon_max", type=float, default=None, help="Maximum longitude for zoom")
+
     args = parser.parse_args()
-    
+
+    # Determine zoom extent
+    zoom_extent = [
+        args.lon_min if args.lon_min is not None else -180,
+        args.lon_max if args.lon_max is not None else 180,
+        args.lat_min if args.lat_min is not None else -90,
+        args.lat_max if args.lat_max is not None else 90,
+    ]
+
     if not os.path.exists(args.grid):
         raise IOError('File does not exist: ' + args.grid)
     
-    view_mpas_mesh(args.grid, outfile=args.outfile, num_chunks=args.nc, vmin=args.vmin, vmax=args.vmax)
+    view_mpas_mesh(args.grid, outfile=args.outfile, num_chunks=args.nc, vmin=args.vmin, vmax=args.vmax,
+                   zoom_extent=zoom_extent)

@@ -28,11 +28,14 @@ EXECS=${DIRHOMED}/execs;               mkdir -p ${EXECS}
 
 # Local variables------------------------------------------------------
 ## Grid file
-GFILEPATH=${DATAIN}/fixed/lat_-23_lon_-45_ellipse_a_1500_b_2200_ang_-45_iradius_2000_margin_800_hres_100_lres_250.region.grid.nc
+#GFILEPATH=../sources/CGFD-USP-Create-Mesh/vtx-mpas-meshes/mesh.grid.nc
+GFILEPATH=${DATAIN}/fixed/lat_-21_lon_-55_ellipse_a_2500_b_3688_ang_-45_iradius_5000_margin_2000_hres_3_lres_1000.region.grid.nc
+#GFILEPATH=/mnt/beegfs/guilherme.mendonca/scripts_CD-CT/circle_ellipse.grid.nc
 ## Output directory and filename to save plot
-POSTFILEPATH=${DATAIN}/fixed/lat_-23_lon_-45_ellipse_a_1500_b_2200_ang_-45_iradius_2000_margin_800_hres_100_lres_250.region.grid.png
+POSTFILEPATH=${DATAIN}/fixed/ellipse_large_global.grid.png
 #---------------------------------------------------------------------
 
 source ~/.bashrc
 conda activate vtx_env
 python3 ${SOURCES}/CGFD-USP-Post-Proc/mpas_plot_grid.py -g $GFILEPATH -o $POSTFILEPATH
+#python3 ${SOURCES}/CGFD-USP-Post-Proc/mpas_plot_grid.py -g $GFILEPATH -o $POSTFILEPATH -vmax 15 -vmin 3 -lat_min -60 -lat_max 25 -lon_min -110 -lon_max -10

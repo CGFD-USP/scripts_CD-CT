@@ -250,6 +250,10 @@ def ellipse_variable_resolution(lat_values, lon_values, **kwargs):
     kwargs['lat_ref'] = lat_ref
     kwargs['lon_ref'] = lon_ref
 
+    print ("building ellipse variable resolution map with parameters:")
+    print (f"  lowres={kwargs.get('lowresolution')} km, highres={kwargs.get('highresolution')} km")
+    print (f"  ellipse a={a_km} km, b={b_km} km, angle={angle_deg} deg, centered at ({lat_ref} deg, {lon_ref} deg)")
+
     # Earth radius in km
     earth_radius_km = kwargs.get('earth_radius_km', 6371.0)
 
@@ -328,10 +332,10 @@ def ellipse_circle_variable_resolution(lat_values, lon_values, **kwargs):
     # Defaults
     defaults = {
         'lowresolution': 1000,
-        'midresolution': 10,
-        'highresolution': 2,
-        'inner_radius': 3700,
-        'outer_radius': 5700,
+        'midresolution': 15,
+        'highresolution': 3,
+        'inner_radius': 5000, #3700,
+        'outer_radius': 7000, #5700,
         'a_km': 30,
         'b_km': 20,
         'angle': 0.0,
@@ -362,6 +366,11 @@ def ellipse_circle_variable_resolution(lat_values, lon_values, **kwargs):
     lat_circle_ref = kwargs['lat_circle_ref']
     lon_circle_ref = kwargs['lon_circle_ref']
     earth_radius_km = kwargs['earth_radius_km']
+
+    print ("building ellipse-circle variable resolution map with parameters:")
+    print (f"  lowres={lowres} km, midres={midres} km, highres={highres} km")
+    print (f"  circle inner_radius={inner_radius} km, outer_radius={outer_radius} km, centered at ({lat_circle_ref} deg, {lon_circle_ref} deg)")
+    print (f"  ellipse a={a_km} km, b={b_km} km, angle={angle_deg} deg, centered at ({lat_ref} deg, {lon_ref} deg)")
 
     # Build 2D lat/lon mesh
     lats = np.asarray(lat_values)
@@ -613,7 +622,7 @@ def variable_resolution_latlonmap(grid, do_region, **kwargs):
             ds['resolution'] = xr.DataArray(data=resol_map, dims=('lat', 'lon'))
         elif do_region == 'n':
             print('\tComputing resolutions using technique %s, global.' % grid)
-            resol_map, kwargs = ellipse_circle_variable_resolution(
+            resol_map, kwargs = ellipse_variable_resolution(#ellipse_circle_variable_resolution(
                 ds.coords['lat'].values, ds.coords['lon'].values, **kwargs)
             ds['resolution'] = xr.DataArray(data=resol_map, dims=('lat', 'lon'))
     else:
